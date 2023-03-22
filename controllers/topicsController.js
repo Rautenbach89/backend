@@ -1,23 +1,20 @@
-const { getCourseModel } = require("../model/course");
-const { getTopicModel } = require("../model/topic");
+const { getCourseModel } = require("../model/Course");
+const { getTopicModel } = require("../model/Topic");
+const { getTaskModel } = require("../model/Task");
 
-// @desc Get all topics
-// @route GET /topics
-// @access Private
+
+
 const getAllTopics = async (req, res) => {
   const Topic = getTopicModel();
   const Course = getCourseModel();
 
-  // Get all topics from MongoDB
   const topics = await Topic.find().lean();
 
-  // If no topics
   if (!topics?.length) {
     return res.status(400).json({ message: "No topics found" });
   }
 
-  // Add topicType name to each topic before sending the response
-  // You could also do this with a for...of loop
+
   const topicsWithRef = await Promise.all(
     topics.map(async (topic) => {
       const course = await Course.findById(topic.course).lean().exec();
@@ -28,48 +25,38 @@ const getAllTopics = async (req, res) => {
   res.json(topicsWithRef);
 };
 
-// @desc Create new topic
-// @route POST /topics
-// @access Private
 const createNewTopic = async (req, res) => {
   const Topic = getTopicModel();
+  const Course = getCourseModel();
 
   const { title, description, course } = req.body;
-  console.log(typeof req.body.course);
 
-  // Confirm data
   if (!title || !description || !course) {
     return res.status(400).json({ error: "All fields are required" });
   }
 
-  // Check for duplicate title
-  const duplicate = await Topic.findOne({ title }).lean().exec();
+  const courseObj = await Course.findOne({ _id: course }).exec();
+  const existingTopic = await Topic.findOne({
+    title,
+    course: courseObj._id
+  }).exec();
 
-  if (duplicate) {
+  if (existingTopic) {
     return res
       .status(409)
       .json({ error: "Duplicate topic title. Please use a different title." });
   }
 
-  // Create and store the new topic
-  try {
-    const topic = await Topic.create({ title, description, course });
-    if (topic) {
-      // Created
-      return res.status(200).json({ message: "New topic created" });
-    } else {
-      return res
-        .status(400)
-        .json({ error: "Invalid topic data received. Please try again." });
-    }
-  } catch (err) {
-    return res.status(500).json({ error: "Failed to create new topic" });
-  }
+  const newTopic = new Topic({
+    title,
+    description,
+    course: courseObj._id,
+  });
+
+  const result = await newTopic.save();
+  res.json(result);
 };
 
-// @desc Update a topic
-// @route PATCH /topics
-// @access Private
 const updateTopic = async (req, res) => {
   const Topic = getTopicModel();
   const Course = getCourseModel();
@@ -84,31 +71,49 @@ const updateTopic = async (req, res) => {
       .status(204)
       .json({ message: `No topic matches ID ${req.body.id}.` });
   }
-  if (req.body?.title) topic.title = req.body.title;
+
+  if (req.body?.title) {
+    const course = await Course.findOne({ _id: topic.course }).exec();
+    const existingTopic = await Topic.findOne({
+      title: req.body.title,
+      course: course._id,
+      _id: { $ne: topic._id },
+    }).exec();
+    if (existingTopic) {
+      return res
+        .status(409)
+        .json({ message: `A topic with title ${req.body.title} already exists in the same course.` });
+    }
+    topic.title = req.body.title;
+  }
+  
   if (req.body?.description) topic.description = req.body.description;
   if (req.body?.course) topic.course = req.body.course;
+
   const result = await topic.save();
   res.json(result);
 };
 
-// @desc Delete a topic
-// @route DELETE /topics
-// @access Private
 const deleteTopic = async (req, res) => {
   const Topic = getTopicModel();
+  const Task = getTaskModel();
 
   const { _id } = req.body;
 
-  // Confirm data
   if (!_id) {
     return res.status(400).json({ message: "Topic ID required" });
   }
 
-  // Confirm note exists to delete
   const topic = await Topic.findById(_id).exec();
 
   if (!topic) {
     return res.status(400).json({ message: "Topic not found" });
+  }
+
+  const tasksUsingTopic = await Task.findOne({ topic: _id });
+
+  if (tasksUsingTopic) {
+    return res.status(420).json({ message: "Tasks are using this topic. Please delete those tasks first." });
   }
 
   const result = await topic.deleteOne();
