@@ -48,10 +48,6 @@ const taskSchema = new mongoose.Schema(
           type: String,
           required: true,
         },
-        isCorrect: {
-          type: Boolean,
-          required: true,
-        },
       },
     ],
     createdBy: {
