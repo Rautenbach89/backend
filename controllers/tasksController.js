@@ -1,26 +1,21 @@
-const { getCourseModel } = require("../model/course");
-const { getTopicModel } = require("../model/topic");
+const { getCourseModel } = require("../model/Course");
+const { getTopicModel } = require("../model/Topic");
 const User = require("../model/User");
-const { getTaskModel } = require("../model/task");
+const { getTaskModel } = require("../model/Task");
 
-// @desc Get all tasks
-// @route GET /tasks
-// @access Private
+
 const getAllTasks = async (req, res) => {
   const Task = getTaskModel();
   const Topic = getTopicModel();
   const Course = getCourseModel();
 
-  // Get all tasks from MongoDB
   const tasks = await Task.find().lean();
 
-  // If no tasks
   if (!tasks?.length) {
     return res.status(400).json({ message: "No tasks found" });
   }
 
-  // Add topic and course name to each task before sending the response
-  // You could also do this with a for...of loop
+
   const tasksWithRefs = await Promise.all(
     tasks.map(async (task) => {
       const topic = await Topic.findById(task.topic).lean().exec();
@@ -32,9 +27,7 @@ const getAllTasks = async (req, res) => {
   res.json(tasksWithRefs);
 };
 
-// @desc Create new task
-// @route POST /tasks
-// @access Private
+
 const createNewTask = async (req, res) => {
   const Task = getTaskModel();
   const Course = getCourseModel();
@@ -54,7 +47,6 @@ const createNewTask = async (req, res) => {
     user,
   } = req.body;
   console.log(req.body);
-  // Confirm data
   if (
     !title ||
     !description ||
@@ -71,21 +63,18 @@ const createNewTask = async (req, res) => {
     return res.status(400).json({ message: "All fields are required" });
   }
 
-  // Check if duration, difficulty, and points are numbers
   if (isNaN(duration) || isNaN(difficulty) || isNaN(points)) {
     return res
       .status(400)
       .json({ message: "Duration, difficulty, and points must be numbers" });
   }
 
-  // Check if difficulty is between 1 and 5
   if (difficulty < 1 || difficulty > 5) {
     return res
       .status(400)
       .json({ message: "Difficulty must be a number between 1 and 5" });
   }
 
-  // Check if course and topic exist in database
   const courseExists = await Course.findById(course);
   if (!courseExists) {
     return res.status(400).json({ message: "Course does not exist" });
@@ -96,7 +85,6 @@ const createNewTask = async (req, res) => {
     return res.status(400).json({ message: "Topic does not exist" });
   }
 
-  // Create and store the new task
   const task = await Task.create({
     title,
     description,
@@ -112,16 +100,12 @@ const createNewTask = async (req, res) => {
   });
 
   if (task) {
-    // Created
     return res.status(200).json({ message: "New task created" });
   } else {
     return res.status(400).json({ message: "Invalid task data received" });
   }
 };
 
-// @desc Update a task
-// @route PATCH /tasks
-// @access Private
 
 const updateTask = async (req, res) => {
   const Task = getTaskModel();
@@ -152,20 +136,15 @@ const updateTask = async (req, res) => {
   res.json(result);
 };
 
-// @desc Delete a task
-// @route DELETE /tasks
-// @access Private
 const deleteTask = async (req, res) => {
   const Task = getTaskModel();
 
   const { _id } = req.body;
 
-  // Confirm data
   if (!_id) {
     return res.status(400).json({ message: "Task ID required" });
   }
 
-  // Confirm note exists to delete
   const task = await Task.findById(_id).exec();
 
   if (!task) {
