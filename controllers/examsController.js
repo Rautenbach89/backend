@@ -1,7 +1,7 @@
-const { getExamModel } = require("../model/exam");
-const { getTaskModel } = require("../model/task");
-const { getCourseModel } = require("../model/course");
-const { getTopicModel } = require("../model/topic");
+const { getExamModel } = require("../model/Exam");
+const { getTaskModel } = require("../model/Task");
+const { getCourseModel } = require("../model/Course");
+const { getTopicModel } = require("../model/Topic");
 
 const getAllExams = async (req, res) => {
   const Exam = getExamModel();
@@ -9,16 +9,12 @@ const getAllExams = async (req, res) => {
 
   const createdBy = req.query.createdBy;
 
-  // Get all tasks from MongoDB
   const exams = await Exam.find({ createdBy: createdBy }).lean();
 
-  // If no tasks
   if (!exams?.length) {
     return res.status(400).json({ message: "No exams found" });
   }
 
-  // Add topic and course name to each task before sending the response
-  // You could also do this with a for...of loop
   const examsWithRef = await Promise.all(
     exams.map(async (exam) => {
       const course = await Course.findById(exam.course).lean().exec();
@@ -37,7 +33,6 @@ const createExam = async (req, res) => {
 
   const { title, course, createdBy, notes, blocks } = req.body;
 
-  // Find tasks for each block
   const examBlocks = [];
   let examDuration = 0;
   let examPoints = 0;
@@ -48,10 +43,26 @@ const createExam = async (req, res) => {
     let blockDurationSum = 0;
     const blockTasks = [];
 
-    while (blockDurationSum < blockDuration) {
-      const courseObj = await Course.findOne({ _id: course });
-      const topicObj = await Topic.findOne({ _id: topic });
+    const courseObj = await Course.findOne({ _id: course });
+    const topicObj = await Topic.findOne({ _id: topic });
+    const allTasks = await Task.find({
+      course: courseObj._id,
+      topic: topicObj._id,
+    });
 
+    const totalTaskDuration = allTasks.reduce(
+      (sum, task) => sum + task.duration,
+      0
+    );
+    if (totalTaskDuration < blockDuration) {
+      return res
+        .status(400)
+        .json({
+          message: `Not enough tasks available for block '${blockName}'`,
+        });
+    }
+
+    while (blockDurationSum < blockDuration) {
       const tasks = await Task.aggregate([
         {
           $match: {
@@ -88,7 +99,6 @@ const createExam = async (req, res) => {
     });
   }
 
-  // Create exam document and save to database
   const exam = new Exam({
     title,
     course,
@@ -108,12 +118,10 @@ const deleteExam = async (req, res) => {
 
   const { _id } = req.body;
 
-  // Confirm data
   if (!_id) {
     return res.status(400).json({ message: "Exam ID required" });
   }
 
-  // Confirm note exists to delete
   const exam = await Exam.findById(_id).exec();
 
   if (!exam) {
