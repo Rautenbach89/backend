@@ -1,5 +1,5 @@
-const { getCourseModel } = require("../model/course");
-const { getTopicModel } = require("../model/topic");
+const { getCourseModel } = require("../model/Course");
+const { getTopicModel } = require("../model/Topic");
 
 const getTopicsByCourse = async (req, res) => {
   const Topic = getTopicModel();
