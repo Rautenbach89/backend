@@ -10,13 +10,11 @@ const handleLogin = async (req, res) => {
       .json({ message: "Username and password are required." });
 
   const foundUser = await User.findOne({ username: user }).exec();
-  if (!foundUser) return res.sendStatus(401); //Unauthorized
-  // evaluate password
+  if (!foundUser) return res.sendStatus(401);
   const match = await bcrypt.compare(pwd, foundUser.password);
   if (match) {
     const roles = Object.values(foundUser.roles).filter(Boolean);
     const language = foundUser.language;
-    // create JWTs
     const accessToken = jwt.sign(
       {
         UserInfo: {
@@ -33,21 +31,17 @@ const handleLogin = async (req, res) => {
       process.env.REFRESH_TOKEN_SECRET,
       { expiresIn: "1d" }
     );
-    // Saving refreshToken with current user
     foundUser.refreshToken = refreshToken;
     const result = await foundUser.save();
     console.log(result);
     console.log(roles);
 
-    // Creates Secure Cookie with refresh token
     res.cookie("jwt", refreshToken, {
       httpOnly: true,
       secure: true,
       sameSite: "None",
       maxAge: 24 * 60 * 60 * 1000,
     });
-
-    // Send authorization roles and access token to user
 
     res.json({ roles, language, accessToken });
   } else {
