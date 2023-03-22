@@ -1,5 +1,7 @@
-const { getCourseModel } = require("../model/course");
-const { getTopicModel } = require("../model/topic");
+const { getCourseModel } = require("../model/Course");
+const { getTopicModel } = require("../model/Topic");
+const { getTaskModel } = require("../model/Task");
+
 
 const getAllCourses = async (req, res) => {
   const Course = getCourseModel();
@@ -32,6 +34,13 @@ const createNewCourse = async (req, res) => {
       .json({ message: "title and description are required" });
   }
 
+  const existingCourse = await Course.findOne({ title: req.body.title }).exec();
+  if (existingCourse) {
+    return res
+      .status(409)
+      .json({ message: "A course with the same title already exists." });
+  }
+
   try {
     const result = await Course.create({
       title: req.body.title,
@@ -57,7 +66,17 @@ const updateCourse = async (req, res) => {
       .status(204)
       .json({ message: `No course matches ID ${req.body.id}.` });
   }
-  if (req.body?.title) course.title = req.body.title;
+
+  if (req.body?.title && req.body.title !== course.title) {
+    const existingCourse = await Course.findOne({ title: req.body.title }).exec();
+    if (existingCourse) {
+      return res
+        .status(409)
+        .json({ message: `A course with the title ${req.body.title} already exists.` });
+    }
+    course.title = req.body.title;
+  }
+
   if (req.body?.description) course.description = req.body.description;
   const result = await course.save();
   res.json(result);
@@ -65,19 +84,24 @@ const updateCourse = async (req, res) => {
 
 const deleteCourse = async (req, res) => {
   const Course = getCourseModel();
+  const Topic = getTopicModel();
+  const Task = getTaskModel();
 
   const { _id } = req.body;
 
-  // Confirm data
   if (!_id) {
     return res.status(400).json({ message: "Course ID required" });
   }
 
-  // Confirm note exists to delete
   const course = await Course.findById(_id).exec();
-
   if (!course) {
     return res.status(400).json({ message: "Course not found" });
+  }
+
+  const topics = await Topic.find({ course: _id }).exec();
+  const tasks = await Task.find({ course: _id }).exec();
+  if (topics.length > 0 || tasks.length > 0) {
+    return res.status(420).json({ message: "Cannot delete course with associated topics or tasks" });
   }
 
   const result = await course.deleteOne();
